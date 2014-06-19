@@ -37,7 +37,7 @@
     <div class="control-group">
         <label class="control-label" for="sl">Sentences limit</label>
         <div class="controls">
-            <input type="text" id="sl" name="sl" placeholder="Sentences limit" value="20"/><br/>
+            <input type="text" id="sl" name="sl" placeholder="Sentences limit" value="15"/><br/>
         </div>
     </div>
     <div class="control-group">

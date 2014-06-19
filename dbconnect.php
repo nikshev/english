@@ -17,6 +17,8 @@ class DBconnect {
     var $dbname;
     var $dbuser;
     var $password;
+    var $link;
+    var $audio;
 
     /**
      * Constructor for DBconnect
@@ -40,8 +42,8 @@ class DBconnect {
         $this->connect();
         $query="INSERT INTO dictionaries (name)
                 VALUES ('".$dictionary."');";
-        mysql_query($query) or die('Query fault: ' . mysql_error());
-        $id=mysql_insert_id();
+        mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link));
+        $id=mysqli_insert_id($this->link);
         $this->disconnect();
         return $id;
     }
@@ -57,7 +59,7 @@ class DBconnect {
         $this->connect();
         $query="INSERT INTO `dictionary`( `id_dic`, `english`, `other`)
                 VALUES (".$id.",'".addslashes($english)."','".addslashes($other)."')";
-        mysql_query($query) or die('Query fault: ' . mysql_error()."<br/>Query:".$query);
+        mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
         $this->disconnect();
     }
 
@@ -68,9 +70,9 @@ class DBconnect {
     public function getDictionaries(){
         $this->connect();
         $query="SELECT * FROM dictionaries";
-        $result=mysql_query($query) or die('Query fault: ' . mysql_error()."<br/>Query:".$query);
+        $result=mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
         $return_arr=array();
-        while($row=mysql_fetch_assoc($result)){
+        while($row=mysqli_fetch_assoc($result)){
             $return_arr[]=array('id'=>$row["id"], "name"=>$row["name"]);
         }
         $this->disconnect();
@@ -84,9 +86,9 @@ class DBconnect {
     public function cleanDB(){
         $this->connect();
         $query="DELETE FROM dictionary";
-        mysql_query($query) or die('Query to dictionary fault: ' . mysql_error());
+        mysqli_query($this->link,$query) or die('Query to dictionary fault: ' . mysqli_error($this->link));
         $query="DELETE FROM dictionaries";
-        mysql_query($query) or die('Query to dictionaries fault: ' . mysql_error());
+        mysql_query($this->link,$query) or die('Query to dictionaries fault: ' . mysql_error($this->link));
         $this->disconnect();
     }
 
@@ -98,8 +100,11 @@ class DBconnect {
     public function getSentence($id,$limit){
         $return_arr=array();
         $this->connect();
-        $query="SELECT english,other FROM `dictionary` WHERE lcount<20 and id_dic=".$id." limit ".$limit;
-        $result=mysql_query($query) or die('Query fault: ' . mysql_error()."<br/>Query:".$query);
+        $query="SELECT id,english,other FROM `dictionary` WHERE lcount<20 and id_dic=".$id." ORDER BY RAND() LIMIT ".$limit;
+        $result=mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        while($row=mysqli_fetch_assoc($result)){
+         $return_arr[]=array('id'=>$row["id"], "english"=>$row["english"],"other"=>$row["other"]);
+        }
         $this->disconnect();
         return $return_arr;
     }
@@ -109,11 +114,11 @@ class DBconnect {
      * Function for connect to db
      */
     private function connect(){
-        $this->link = mysql_connect($this->host, $this->dbuser,$this->password);
+        $this->link = mysqli_connect($this->host, $this->dbuser,$this->password,$this->dbname);
         if (!$this->link) {
-            die('Connection error: ' . mysql_error());
+            die('Connection error: ' . mysqli_qerror());
         }
-        mysql_select_db($this->dbname) or die('Database error: ' . mysql_error());
+        //mysql_select_db($this->dbname) or die('Database error: ' . mysql_error());
     }
 
     /**
@@ -122,6 +127,54 @@ class DBconnect {
      */
     private function disconnect(){
         if (isset($this->link))
-            mysql_close($this->link);
+            mysqli_close($this->link);
+    }
+
+    /**
+     * Function setText()
+     * Function set text and get it mp3 representation from Google
+     * input $text - text for audio convert
+     */
+    function setText($text,$lng="en")
+    {
+        $text = trim($text);
+        if (!empty($text)) {
+            $uagent = "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/535.2 (KHTML, like Gecko) Chrome/15.0.872.0 Safari/535.2";
+            $text =  urlencode(iconv("UTF-8", "UTF-8", $text));
+            $url = "http://translate.google.com/translate_tts?tl=".$lng."&q={$text}";
+            $ch = curl_init( $url );
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+            curl_setopt($ch, CURLOPT_ENCODING, "");
+            curl_setopt($ch, CURLOPT_USERAGENT, $uagent);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 120);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+            $content = curl_exec( $ch );
+            $this->audio = $content;
+            return $this->audio;
+        } else {
+            return false;
+        }
+    }
+
+
+    /**
+     * Function saveToFile()
+     * Function save to file audio content which set up function setText
+     * input $filename - file name for save audio content
+     */
+    function saveToFile($filename)
+    {
+        $filename = trim($filename);
+        if (!file_exists($filename)) {
+            if (!empty($filename)) {
+                return file_put_contents($filename, $this->audio);
+            } else {
+                return false;
+            }
+        }
     }
 }
