@@ -10,9 +10,20 @@
  ini_set('display_errors', true);
 
  $dbconnect = new DBconnect();
+ $settings=$dbconnect->getSettings();
 
- $id=intval($_POST["dic_id"]);
- $sl=intval($_POST["sl"]);
+ if(!isset($settings["sent_limit"]))
+     $settings["sent_limit"]=15;
+
+ if(!isset($settings["interval"]))
+     $settings["interval"]=20;
+
+ if(!isset($settings["dictionary"]))
+     $settings["dictionary"]=8;
+
+ $id=$settings["dictionary"];
+ $sl=$settings["sent_limit"];
+ $in=$settings["interval"];
 ?>
 
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
@@ -31,7 +42,8 @@
 if (isset($id)){
     if (!isset($sl))
         $sl=20;
-    $str="<table id=\"myTable\" class=\"table table-bordered\" width=\"10%\">".
+    $str=" <input type=\"hidden\" id=\"interval\" name=\"interval\" value=\"".$in."\" />
+           <table id=\"myTable\" class=\"table table-bordered\" width=\"10%\">".
            "<thead>".
             "<tr>".
               "<th>English sentence</th><th>Other sentence</th>".
@@ -39,7 +51,7 @@ if (isset($id)){
            "</thead>".
            "<tbody>";
 
-
+    $dbconnect->newExercise();
     $result=$dbconnect->getSentence($id,$sl);
     $dir="../audio/";
     foreach ($result as $row){
@@ -49,6 +61,7 @@ if (isset($id)){
         $dbconnect->saveToFile($filename_en);
         $dbconnect->setText(trim($row["other"]),$lng="ru");
         $dbconnect->saveToFile($filename_ot);
+        $dbconnect->addSentenceToExercise($row["id"]);
         $str.="<tr>";
         $str.='<td class="first"><input type="hidden" id="sid[]" name="sid[]" value="'.$row["id"].'">'.trim($row["english"]);
         $str.='<audio id="'.$row["id"].'" controls="controls">';
@@ -64,13 +77,14 @@ if (isset($id)){
         $str.="</td>";
         $str.="</tr>";
    }
-    $str.="</tbody>";
+    $str.="</tbody></table>";
 
 }
 ?>
 <div style="text-align:center;">
  <div style="margin: 0 auto; width:60%">
     <h1>Lesson</h1>
+     <a id="skip" href="../english/exercise.php">Skip lesson and start exercise</a>
     <?php  echo $str; ?>
  </div>
 </div>

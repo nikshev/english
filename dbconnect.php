@@ -95,7 +95,7 @@ class DBconnect {
     /**
      * Function getSentence
      * Function get sentence and return array
-     *
+     * output $return_arr - sentences from exercise
      */
     public function getSentence($id,$limit){
         $return_arr=array();
@@ -176,5 +176,186 @@ class DBconnect {
                 return false;
             }
         }
+    }
+
+    /**
+     * Function getSettings
+     * Function get settings from database and return settings array
+     * outpu $retarr - settings array
+     */
+    function getSettings(){
+      $retarr=array();
+      $this->connect();
+      $query="SELECT * FROM settings";
+      $result=mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+      while($row=mysqli_fetch_assoc($result)){
+          $retarr[$row["name"]]=$row["parameters"];
+      }
+      $this->disconnect();
+      return $retarr;
+    }
+
+    /**
+     * Function setSettings
+     * Function set up settings from database and return settings array
+     * input $settings - settings array
+     */
+    function setSettings($settings){
+      if(!isset($settings["sent_limit"]))
+          $settings["sent_limit"]=15;
+
+      if(!isset($settings["interval"]))
+          $settings["interval"]=20;
+
+      if(!isset($settings["dictionary"]))
+         $settings["dictionary"]=8;
+
+      $this->connect();
+      $query="UPDATE settings SET parameters=".$settings["sent_limit"]." WHERE name='sent_limit'";
+      mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/> Query:".$query);
+      $query="UPDATE settings SET parameters=".$settings["interval"]." WHERE name='interval'";
+      mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/> Query:".$query);
+      $query="UPDATE settings SET parameters=".$settings["dictionary"]." WHERE name='dictionary'";
+      mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/> Query:".$query);
+      $this->disconnect();
+    }
+
+    /**
+     * Function newExercise()
+     * Function clean exercise table in database
+     */
+    function newExercise(){
+        $this->connect();
+        $query="DELETE FROM exercise";
+        mysqli_query($this->link,$query) or die('Query to exercise fault: ' . mysqli_error($this->link));
+        $this->disconnect();
+    }
+
+    /**
+     * Function addSentenceToExercise()
+     * Function add sentence id to exercise
+     * input $sentence_id - id of sentence
+     */
+    function addSentenceToExercise($sentence_id){
+        $this->connect();
+        $query="INSERT INTO `exercise`( `sentence_id`)
+                VALUES (".$sentence_id.")";
+        mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        $this->disconnect();
+    }
+
+    /**
+     * Function getSentencesFromExercise()
+     * Function get sentences from exercise
+     * input $sentence_id - id of sentence
+     */
+    function getSentencesFromExercise(){
+        $return_arr=array();
+        $this->connect();
+        $query="SELECT A.* FROM (SELECT dictionary.id,dictionary.english,dictionary.other FROM dictionary
+                JOIN exercise WHERE dictionary.id=exercise.sentence_id ORDER BY dictionary.id DESC, RAND()) AS A
+                ORDER BY RAND()";
+        $result=mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        while($row=mysqli_fetch_assoc($result)){
+            $return_arr[]=array('id'=>$row["id"], "english"=>$row["english"],"other"=>$row["other"]);
+        }
+        $this->disconnect();
+        return $return_arr;
+    }
+
+    /**
+     * Function getSentenceByID
+     * Function get sentences from dictionary table by sentence id
+     * input  $id - id of sentence
+     * output $retarr - array of sentence
+     */
+    function getSentenceByID($id){
+        $return_arr=array();
+        $this->connect();
+        $query="SELECT * FROM dictionary WHERE id=".$id;
+        $result=mysqli_query($this->link,$query) or die('Query fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        while ($row=mysqli_fetch_assoc($result)){
+         $return_arr["english"]=$row["english"];
+         $return_arr["other"]=$row["other"];
+        }
+        $this->disconnect();
+        return $return_arr;
+    }
+
+    /**
+     * Function compareSentences()
+     * Function compare translated sentence with original
+     * input $s_arr - id of sentence
+     *       $v_arr - translated sentences
+     *       $direction - direction of compare (true - compare $v_arr
+     *                                          with "other" sentnece,
+     *                                          false - compare $v_arr
+     *                                          with "english" sentnece,
+     */
+    function compareSentences($s_arr,$v_arr,$direction){
+
+      if (!isset($direction))
+         $direction=true;
+
+      if (isset($s_arr)&&isset($v_arr)){
+          for ($i=0;$i<count($s_arr);$i++){
+            $result=$this->getSentenceByID($s_arr[$i]);
+            if ($direction){
+              $var_1=$result["other"];
+            } else {
+              $var_1=$result["english"];
+            }
+            similar_text($this->removeSymbols($var_1),$this->removeSymbols($v_arr[$i]), $percent);
+            if ($percent>70){
+             $this->updateSuccesCount($s_arr[$i]);
+            }
+          }
+      }
+    }
+
+    /**
+     * Function removeSymbols
+     * Function remove specefic symbols and spaces from string
+     * input  $str - string for process
+     * output $string - clean string
+     */
+    function removeSymbols($str){
+        $string=$str;
+        $string = str_replace(' ', '', $string);
+        $string = str_replace('.', '', $string);
+        $string = str_replace('-', '', $string);
+        $string = str_replace('|', '', $string);
+        $string = str_replace('?', '', $string);
+        $string = str_replace('!', '', $string);
+        $string = str_replace('(', '', $string);
+        $string = str_replace(')', '', $string);
+        $string = str_replace('"', '', $string);
+        $string = str_replace('\'', '', $string);
+        $string = str_replace('\\', '', $string);
+        $string = str_replace('/', '', $string);
+        return $string;
+    }
+
+    /**
+     * Function updateSuccesCount
+     * Increase lcount in dictionary table
+     * input  $id - id of sentence
+     */
+    function updateSuccesCount($id){
+        $this->connect();
+        $query="UPDATE `dictionary` SET `lcount`=`lcount`+1 WHERE `id`=".$id;
+        mysqli_query($this->link,$query) or die('Query to update count fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        $this->disconnect();
+    }
+
+    /**
+     * Function cleanSuccessCount()
+     * Set lcount=0 in dictionary table for all records
+     */
+    function cleanSuccessCount(){
+        $this->connect();
+        $query="UPDATE dictionary SET lcount=0";
+        mysqli_query($this->link,$query) or die('Query to update count fault: ' . mysqli_error($this->link)."<br/>Query:".$query);
+        $this->disconnect();
     }
 }
